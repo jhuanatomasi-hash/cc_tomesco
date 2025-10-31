@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciador Financeiro (v9)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --cor-principal: #6366F1; /* Indigo-500 */
+            --cor-principal-hover: #4F46E5; /* Indigo-600 */
+            --cor-secundaria: #EC4899; /* Pink-500 */
+            --cor-fundo: #F3F4F6; /* Gray-100 */
+            --cor-fundo-card: #FFFFFF;
+        }
+        html, body {
+            height: 100%;
+        }
+        body {
+            background-color: var(--cor-fundo);
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .aba {
+            @apply px-4 py-2 font-medium text-gray-500 border-b-2 border-transparent cursor-pointer transition-all duration-200 whitespace-nowrap;
+        }
+        .aba.ativa {
+            @apply border-indigo-500 text-indigo-600;
+        }
+        /* Abas internas de cartões */
+        .aba-cartao {
+            @apply px-3 py-2 text-sm font-medium text-gray-600 rounded-t-lg cursor-pointer border-b-2 border-transparent whitespace-nowrap;
+        }
+        .aba-cartao.ativa {
+            @apply bg-white text-indigo-700 border-b-2 border-indigo-500;
+        }
+        .input-form {
+            @apply w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all;
+        }
+        .btn-principal {
+            @apply w-full bg-indigo-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200;
+        }
+        .loader {
+            border-top-color: var(--cor-principal);
+            -webkit-animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { -webkit-transform: rotate(360deg); }
+        }
+        /* Esconde o app e mostra o auth por padrão */
+        #app-container { display: none; }
+        #auth-container { 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+
+        /* Esconde os painéis de cartões e planilhas pessoais */
+        .painel-cartao { display: none; }
+        #aba-jhuana, #aba-larissa { display: none; }
+        
+        /* Abas bloqueadas */
+        .aba.bloqueada {
+            @apply cursor-not-allowed text-gray-400 bg-gray-50 opacity-70;
+        }
+
+        .fatura-item[data-atribuido="Jhuana"] { border-left: 4px solid #EC4899; } /* Pink */
+        .fatura-item[data-atribuido="Larissa"] { border-left: 4px solid #8B5CF6; } /* Violet */
+        .fatura-item[data-atribuido="Casa"] { border-left: 4px solid #3B82F6; } /* Blue */
+    </style>
+    <!-- Importa o Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="text-gray-900">
+
+    <!-- ===== TELA DE LOGIN / CADASTRO ===== -->
+    <div id="auth-container">
+        <div class="max-w-md w-full p-6 bg-white rounded-lg shadow-xl">
+            <h2 id="auth-title" class="text-2xl font-bold text-center text-gray-800 mb-6">Login</h2>
+            <div id="auth-error" class="text-red-500 text-sm mb-4 text-center hidden"></div>
+            <form id="auth-form" class="space-y-4">
+                <input id="auth-email" type="email" placeholder="Seu e-mail" class="input-form" required>
+                <input id="auth-password" type="password" placeholder="Sua senha" class="input-form" required>
+                <button type="submit" id="auth-submit-btn" class="btn-principal">Entrar</button>
+            </form>
+            <button id="auth-toggle-btn" class="text-sm text-indigo-500 hover:underline text-center w-full mt-4">
+                Não tem uma conta? Cadastre-se
+            </button>
+        </div>
+    </div>
+
+    <!-- ===== APLICATIVO PRINCIPAL (ESCONDIDO) ===== -->
+    <div id="app-container" class="max-w-7xl mx-auto p-4 md:p-8">
+        
+        <!-- Cabeçalho -->
+        <header class="flex flex-col md:flex-row justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold text-indigo-600">Gerenciador Financeiro do Casal</h1>
+            <div class="flex items-center space-x-4 mt-4 md:mt-0">
+                <span id="user-email" class="text-gray-600 text-sm hidden md:inline"></span>
+                <button id="logout-btn" class="text-sm text-red-500 hover:underline">Sair</button>
+                
+                <select id="seletor-mes" class="rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    <!-- Meses serão populados pelo JS -->
+                </select>
+
+                <div id="status-conexao" class="flex items-center space-x-2 text-sm text-gray-500">
+                    <div id="status-luz" class="w-3 h-3 rounded-full bg-gray-400"></div>
+                    <span id="status-texto">Conectando...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Abas de Navegação -->
+        <nav class="flex border-b border-gray-300 mb-6 overflow-x-auto">
+            <div id="tab-casa" class="aba ativa" onclick="mudarAba('casa')">Orçamento da Casa</div>
+            <div id="tab-jhuana" class="aba" onclick="mudarAba('jhuana')">Planilha Jhuana</div>
+            <div id="tab-larissa" class="aba" onclick="mudarAba('larissa')">Planilha Larissa</div>
+        </nav>
+
+        <!-- Conteúdo das Abas -->
+        <main>
+            <!-- ===== ABA: ORÇAMENTO DA CASA ===== -->
+            <section id="aba-casa" class="space-y-8">
+                
+                <!-- 1. Rendas -->
+                <div class="bg-white p-6 rounded-lg shadow-lg space-y-4">
+                    <h2 class="text-xl font-semibold text-gray-800 border-b pb-2">1. Rendas da Casa</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Renda Jhuana -->
+                        <div class="space-y-2">
+                            <h3 class="text-lg font-medium text-gray-700">Salário Jhuana</h3>
+                            <div>
+                                <label class="text-sm font-medium text-gray-600">Pagamento 1 (Início do Mês)</label>
+                                <input type="text" id="salario-jhuana-1" data-pessoa="jhuana" data-campo="salario1" class="input-form mt-1" placeholder="0,00" onchange="salvarDados()">
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-600">Pagamento 2 (Dia 20)</label>
+                                <input type="text" id="salario-jhuana-2" data-pessoa="jhuana" data-campo="salario2" class="input-form mt-1" placeholder="0,00" onchange="salvarDados()">
+                            </div>
+                            <div class="text-right font-bold text-lg text-gray-800 pt-2">
+                                Salário Total (Jhuana): <span id="salario-total-jhuana">R$ 0,00</span>
+                            </div>
+                        </div>
+                        <!-- Renda Larissa -->
+                        <div class="space-y-2">
+                            <h3 class="text-lg font-medium text-gray-700">Salário Larissa</h3>
+                            <div>
+                                <label class="text-sm font-medium text-gray-600">Pagamento 1 (Início do Mês)</label>
+                                <input type="text" id="salario-larissa-1" data-pessoa="larissa" data-campo="salario1" class="input-form mt-1" placeholder="0,00" onchange="salvarDados()">
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-600">Pagamento 2 (Dia 20)</label>
+                                <input type="text" id="salario-larissa-2" data-pessoa="larissa" data-campo="salario2" class="input-form mt-1" placeholder="0,00" onchange="salvarDados()">
+                            </div>
+                            <div class="text-right font-bold text-lg text-gray-800 pt-2">
+                                Salário Total (Larissa): <span id="salario-total-larissa">R$ 0,00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Divisão Proporcional -->
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <h2 class="text-xl font-semibold text-gray-800 border-b pb-2">2. Divisão Proporcional</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 text-center">
+                        <div class="bg-indigo-100 p-4 rounded-lg">
+                            <div class="text-sm font-medium text-indigo-700">Renda Total da Casa</div>
+                            <div id="renda-total-casa" class="text-2xl font-bold text-indigo-900">R$ 0,00</div>
+                        </div>
+                        <div class="bg-pink-100 p-4 rounded-lg">
+                            <div class="text-sm font-medium text-pink-700">Contribuição Jhuana</div>
+                            <div id="percentual-jhuana" class="text-2xl font-bold text-pink-900">0%</div>
+                        </div>
+                        <div class="bg-violet-100 p-4 rounded-lg">
+                            <div class="text-sm font-medium text-violet-700">Contribuição Larissa</div>
+                            <div id="percentual-larissa" class="text-2xl font-bold text-violet-900">0%</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Despesas da Casa -->
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <h2 class="text-xl font-semibold text-gray-800 border-b pb-2">3. Despesas da Casa</h2>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-4">
+                        
+                        <!-- Coluna Contas Fixas -->
+                        <div class="space-y-3">
+                            <h3 class="text-lg font-medium text-gray-700">Contas Fixas</h3>
+                            <p class="text-sm text-gray-500">Preencha os valores para o mês ativo.</p>
+                            <div id="lista-contas-fixas" class="space-y-3 max-h-96 overflow-y-auto pr-2">
+                                <!-- Contas fixas serão populadas pelo JS -->
+                            </div>
+                        </div>
+
+                        <!-- Coluna Faturas e Variáveis -->
+                        <div class="space-y-4">
+                            <h3 class="text-lg font-medium text-gray-700">Faturas e Despesas Variáveis</h3>
+                            
+                            <!-- Abas de Cartões -->
+                            <nav class="flex border-b border-gray-200 bg-gray-50 rounded-t-lg overflow-x-auto">
+                                <button class="aba-cartao ativa" onclick="mudarAbaCartao(event, 'Nubank')">Nubank</button>
+                                <button class="aba-cartao" onclick="mudarAbaCartao(event, 'Atacadão')">Atacadão</button>
+                                <button class="aba-cartao" onclick="mudarAbaCartao(event, 'Carrefour')">Carrefour</button>
+                                <button class="aba-cartao" onclick="mudarAbaCartao(event, 'Diversos')">Diversos (Pix/Dinheiro)</button>
+                            </nav>
+
+                            <div class="p-4 bg-white border border-gray-200 border-t-0 rounded-b-lg">
+                                <!-- Painel Nubank -->
+                                <div id="painel-cartao-Nubank" class="painel-cartao space-y-4">
+                                    <!-- Formulário de Adição -->
+                                    <form id="form-fatura-Nubank" class="space-y-3">
+                                        <input type="text" id="Nubank-descricao" placeholder="Descrição (Ex: Mercado)" class="input-form" required>
+                                        <div class="grid grid-cols-3 gap-3">
+                                            <input type="text" id="Nubank-valor" placeholder="Valor (R$)" class="input-form" required>
+                                            <input type="text" id="Nubank-tag" placeholder="Tag (Ex: Lazer)" class="input-form">
+                                            <select id="Nubank-atribuir" class="input-form">
+                                                <option value="Casa">Casa (Divide)</option>
+                                                <option value="Jhuana">Jhuana (Pessoal)</option>
+                                                <option value="Larissa">Larissa (Pessoal)</option>
+                                            </select>
+                                        </div>
+                                        <button type="submit" class="btn-principal">Adicionar no Nubank</button>
+                                    </form>
+                                    <!-- Lista de Gastos -->
+                                    <div id="lista-fatura-Nubank" class="lista-gastos space-y-2 max-h-60 overflow-y-auto pr-2"></div>
+                                </div>
+                                
+                                <!-- Painel Atacadão -->
+                                <div id="painel-cartao-Atacadão" class="painel-cartao space-y-4">
+                                    <form id="form-fatura-Atacadão" class="space-y-3">
+                                        <input type="text" id="Atacadão-descricao" placeholder="Descrição" class="input-form" required>
+                                        <div class="grid grid-cols-3 gap-3">
+                                            <input type="text" id="Atacadão-valor" placeholder="Valor (R$)" class="input-form" required>
+                                            <input type="text" id="Atacadão-tag" placeholder="Tag" class="input-form">
+                                            <select id="Atacadão-atribuir" class="input-form">
+                                                <option value="Casa">Casa (Divide)</option>
+                                                <option value="Jhuana">Jhuana (Pessoal)</option>
+                                                <option value="Larissa">Larissa (Pessoal)</option>
+                                            </select>
+                                        </div>
+                                        <button type="submit" class="btn-principal">Adicionar no Atacadão</button>
+                                    </form>
+                                    <div id="lista-fatura-Atacadão" class="lista-gastos space-y-2 max-h-60 overflow-y-auto pr-2"></div>
+                                </div>
+
+                                <!-- Painel Carrefour -->
+                                <div id="painel-cartao-Carrefour" class="painel-cartao space-y-4">
+                                    <form id="form-fatura-Carrefour" class="space-y-3">
+                                        <input type="text" id="Carrefour-descricao" placeholder="Descrição" class="input-form" required>
+                                        <div class="grid grid-cols-3 gap-3">
+                                            <input type="text" id="Carrefour-valor" placeholder="Valor (R$)" class="input-form" required>
+                                            <input type="text" id="Carrefour-tag" placeholder="Tag" class="input-form">
+                                            <select id="Carrefour-atribuir" class="input-form">
+                                                <option value="Casa">Casa (Divide)</option>
+                                                <option value="Jhuana">Jhuana (Pessoal)</option>
+                                                <option value="Larissa">Larissa (Pessoal)</option>
+                                            </select>
+                                        </div>
+                                        <button type="submit" class="btn-principal">Adicionar no Carrefour</button>
+                                    </form>
+                                    <div id="lista-fatura-Carrefour" class="lista-gastos space-y-2 max-h-60 overflow-y-auto pr-2"></div>
+                                </div>
+
+                                <!-- Painel Diversos -->
+                                <div id="painel-cartao-Diversos" class="painel-cartao space-y-4">
+                                    <form id="form-fatura-Diversos" class="space-y-3">
+                                        <input type="text" id="Diversos-descricao" placeholder="Descrição (Ex: Padaria)" class="input-form" required>
+                                        <div class="grid grid-cols-3 gap-3">
+                                            <input type="text" id="Diversos-valor" placeholder="Valor (R$)" class="input-form" required>
+                                            <input type="text" id="Diversos-tag" placeholder="Tag" class="input-form">
+                                            <select id="Diversos-atribuir" class="input-form">
+                                                <option value="Casa">Casa (Divide)</option>
+                                                <option value="Jhuana">Jhuana (Pessoal)</option>
+                                                <option value="Larissa">Larissa (Pessoal)</option>
+                                            </select>
+                                        </div>
+                                        <button type="submit" class="btn-principal">Adicionar Gasto Diverso</button>
+                                    </form>
+                                    <div id="lista-fatura-Diversos" class="lista-gastos space-y-2 max-h-60 overflow-y-auto pr-2"></div>
+                                </div>
+                            </div>
+
+                            <!-- Filtro de Tags -->
+                            <div class="flex justify-between items-center pt-4">
+                                <h4 class="text-md font-medium text-gray-700">Gastos Lançados (Total)</h4>
+                                <select id="filtro-tag" class="text-sm rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option value="todas">Mostrar Todas as Tags</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Lista Agregada (para filtro) -->
+                            <div id="lista-faturas-agregada" class="space-y-2 max-h-96 overflow-y-auto pr-2">
+                                <!-- Itens de fatura filtrados serão populados pelo JS -->
+                            </div>
+                            <div class="text-right font-bold text-lg text-gray-800 pt-2">
+                                Total Variável: <span id="total-variavel-filtrado">R$ 0,00</span>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Resumo e Fechamento -->
+                <div class="bg-indigo-900 text-white p-6 rounded-lg shadow-lg space-y-4">
+                    <h2 class="text-xl font-semibold border-b border-indigo-700 pb-2">4. Resumo e Fechamento</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-center">
+                        <div class="bg-indigo-800 p-3 rounded-lg">
+                            <div class="text-sm opacity-80">Renda Total</div>
+                            <div id="resumo-renda-total" class="text-2xl font-bold">R$ 0,00</div>
+                        </div>
+                        <div class="bg-indigo-800 p-3 rounded-lg">
+                            <div class="text-sm opacity-80">Despesa Total (Casa)</div>
+                            <div id="resumo-despesa-casa" class="text-2xl font-bold">R$ 0,00</div>
+                        </div>
+                        <div class="bg-indigo-800 p-3 rounded-lg">
+                            <div class="text-sm opacity-80">Despesas Pessoais</div>
+                            <div id="resumo-despesas-pessoais" class="text-2xl font-bold">R$ 0,00</div>
+                        </div>
+                        <div class="bg-red-500 p-3 rounded-lg">
+                            <div class="text-sm opacity-80">Sobra/Falta (Total)</div>
+                            <div id="resumo-sobra-total" class="text-2xl font-bold">R$ 0,00</div>
+                        </div>
+                    </div>
+
+                    <h3 class="text-lg font-semibold pt-4">Fechamento Individual</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Fechamento Jhuana -->
+                        <div class="bg-pink-900/50 p-4 rounded-lg space-y-2">
+                            <h4 class="font-bold text-center text-lg">Fechamento Jhuana</h4>
+                            <div class="flex justify-between text-sm"><span>Salário:</span> <span id="fechamento-jhuana-salario">R$ 0,00</span></div>
+                            <div class="flex justify-between text-sm"><span>Contribuição Casa (%):</span> <span id="fechamento-jhuana-contribuicao">R$ 0,00</span></div>
+                            <div class="flex justify-between text-sm"><span>Gastos Pessoais:</span> <span id="fechamento-jhuana-pessoais">R$ 0,00</span></div>
+                            <hr class="border-pink-300/30">
+                            <div class="flex justify-between font-bold text-lg"><span>Sobra Final:</span> <span id="fechamento-jhuana-sobra">R$ 0,00</span></div>
+                        </div>
+                        <!-- Fechamento Larissa -->
+                        <div class="bg-violet-900/50 p-4 rounded-lg space-y-2">
+                            <h4 class="font-bold text-center text-lg">Fechamento Larissa</h4>
+                            <div class="flex justify-between text-sm"><span>Salário:</span> <span id="fechamento-larissa-salario">R$ 0,00</span></div>
+                            <div class="flex justify-between text-sm"><span>Contribuição Casa (%):</span> <span id="fechamento-larissa-contribuicao">R$ 0,00</span></div>
+                            <div class="flex justify-between text-sm"><span>Gastos Pessoais:</span> <span id="fechamento-larissa-pessoais">R$ 0,00</span></div>
+                            <hr class="border-violet-300/30">
+                            <div class="flex justify-between font-bold text-lg"><span>Sobra Final:</span> <span id="fechamento-larissa-sobra">R$ 0,00</span></div>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+            
+            <!-- ===== ABA: PLANILHA JHUANA ===== -->
+            <section id="aba-jhuana" class="space-y-6 hidden">
+                <div class="flex justify-between items-center bg-pink-100 p-4 rounded-lg">
+                    <h2 class="text-xl font-semibold text-pink-800">Planilha Pessoal (Jhuana)</h2>
+                    <div class="text-right">
+                        <div class="text-sm font-medium text-pink-700">Sobra do Orçamento</div>
+                        <div id="sobra-pessoal-jhuana" class="text-2xl font-bold text-pink-900">R$ 0,00</div>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <h3 class="text-lg font-medium text-gray-700 mb-4">Gastos Espelhados (Faturas)</h3>
+                    <div id="espelho-jhuana" class="space-y-2 max-h-96 overflow-y-auto pr-2">
+                        <!-- Gastos espelhados aparecem aqui -->
+                        <p class="text-sm text-gray-500">Gastos pessoais lançados nas faturas aparecerão aqui.</p>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- ===== ABA: PLANILHA LARISSA ===== -->
+            <section id="aba-larissa" class="space-y-6 hidden">
+                <div class="flex justify-between items-center bg-violet-100 p-4 rounded-lg">
+                    <h2 class="text-xl font-semibold text-violet-800">Planilha Pessoal (Larissa)</h2>
+                    <div class="text-right">
+                        <div class="text-sm font-medium text-violet-700">Sobra do Orçamento</div>
+                        <div id="sobra-pessoal-larissa" class="text-2xl font-bold text-violet-900">R$ 0,00</div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <h3 class="text-lg font-medium text-gray-700 mb-4">Gastos Espelhados (Faturas)</h3>
+                    <div id="espelho-larissa" class="space-y-2 max-h-96 overflow-y-auto pr-2">
+                        <!-- Gastos espelhados aparecem aqui -->
+                         <p class="text-sm text-gray-500">Gastos pessoais lançados nas faturas aparecerão aqui.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ===== SCRIPTS ===== -->
+    
+    <!-- Importação do Firebase -->
+    <script type="module">
+        // Importações dos módulos do Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { 
+            getAuth, 
+            onAuthStateChanged,
+            createUserWithEmailAndPassword,
+            signInWithEmailAndPassword,
+            signOut
+        } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            setDoc, 
+            onSnapshot,
+            updateDoc,
+            enableNetwork,
+            disableNetwork
+        } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // ===== CONFIGURAÇÃO DO FIREBASE (COLADO PELO USUÁRIO) =====
+        const firebaseConfig = {
+          apiKey: "AIzaSyC3L2jUTamsYJ0C7bJG1DDAEWPfuietuWE",
+          authDomain: "financas-jhuana-larissa.firebaseapp.com",
+          projectId: "financas-jhuana-larissa",
+          storageBucket: "financas-jhuana-larissa.firebasestorage.app",
+          messagingSenderId: "511581550621",
+          appId: "1:511581550621:web:c128d4ae58d59a229a6ef4"
+        };
+        // ==========================================================
+
+        // Inicializa o Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // --- Variáveis Globais do App ---
+        let appContainer = document.getElementById('app-container');
+        let authContainer = document.getElementById('auth-container');
+        let currentUser = null;
+        let userEmailPrefix = ''; // 'jhuana', 'larissa', ou 'outro'
+        let docRef = null; // Referência para o documento no Firestore
+        let unsubscribeFromFirestore = null; // Função para parar de ouvir o snapshot
+        let appState = {}; // Onde todos os dados do app (de todos os meses) são guardados
+        let mesAtivo = ''; // Ex: '2025-10'
+        let isSaving = false; // Flag para evitar salvamentos múltiplos
+
+        const seletorMes = document.getElementById('seletor-mes');
+        const statusTexto = document.getElementById('status-texto');
+        const statusLuz = document.getElementById('status-luz');
+
+        const contasFixasBase = [
+            { id: 'condominio', nome: 'Condomínio (com Água)' }, // Removido "Gás"
+            { id: 'luz', nome: 'Luz' },
+            { id: 'parcela_ape', nome: 'Parcela Apê' },
+            { id: 'internet', nome: 'Internet' },
+            { id: 'iptu', nome: 'IPTU (Parcela)' },
+            { id: 'caixa_casa', nome: 'Caixa da Casa (Poupança)' }
+        ];
+
+        // ===== LÓGICA DE AUTENTICAÇÃO =====
+
+        const authForm = document.getElementById('auth-form');
+        const authEmail = document.getElementById('auth-email');
+        const authPassword = document.getElementById('auth-password');
+        const authTitle = document.getElementById('auth-title');
+        const authSubmitBtn = document.getElementById('auth-submit-btn');
+        const authToggleBtn = document.getElementById('auth-toggle-btn');
+        const authError = document.getElementById('auth-error');
+        let isLoginMode = true;
+
+        // Alterna entre modo Login e Cadastro
+        authToggleBtn.addEventListener('click', () => {
+            isLoginMode = !isLoginMode;
+            authTitle.textContent = isLoginMode ? 'Login' : 'Cadastre-se';
+            authSubmitBtn.textContent = isLoginMode ? 'Entrar' : 'Criar Conta';
+            authToggleBtn.textContent = isLoginMode ? 'Não tem uma conta? Cadastre-se' : 'Já tem uma conta? Faça login';
+            authError.classList.add('hidden');
+            authForm.reset();
+        });
+
+        // Lida com o envio do formulário (Login ou Cadastro)
+        authForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = authEmail.value;
+            const password = authPassword.value;
+            authError.classList.add('hidden');
+            authSubmitBtn.disabled = true;
+            authSubmitBtn.textContent = isLoginMode ? 'Entrando...' : 'Criando...';
+
+            try {
+                if (isLoginMode) {
+                    await signInWithEmailAndPassword(auth, email, password);
+                } else {
+                    await createUserWithEmailAndPassword(auth, email, password);
+                }
+            } catch (error) {
+                console.error("Erro de autenticação:", error);
+                authError.textContent = converterErroFirebase(error.code);
+                authError.classList.remove('hidden');
+            } finally {
+                authSubmitBtn.disabled = false;
+                authSubmitBtn.textContent = isLoginMode ? 'Entrar' : 'Criar Conta';
+            }
+        });
+
+        // Logout
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            signOut(auth);
+        });
+
+        // Observador do estado de Autenticação (A "PORTA DE ENTRADA" DO APP)
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // --- USUÁRIO LOGADO ---
+                currentUser = user;
+                document.getElementById('user-email').textContent = user.email;
+
+                // Define o documento COMPARTILHADO no Firestore
+                docRef = doc(db, 'financas-casal', 'dados-compartilhados-v1');
+
+                // Prepara a interface do app (mostra/esconde/bloqueia abas)
+                prepararInterfacePrivada(user.email);
+                
+                // Mostra o app e esconde o login
+                authContainer.style.display = 'none';
+                appContainer.style.display = 'block';
+
+                // Inicia o app
+                iniciarApp();
+                try {
+                    enableNetwork(db); // Garante que a rede está ativa
+                } catch (e) { console.warn(e); }
+
+            } else {
+                // --- USUÁRIO DESLOGADO ---
+                currentUser = null;
+                userEmailPrefix = '';
+                if (unsubscribeFromFirestore) {
+                    unsubscribeFromFirestore();
+                }
+                authContainer.style.display = 'flex';
+                appContainer.style.display = 'none';
+                try {
+                    disableNetwork(db); // Desconecta do DB
+                } catch (e) { console.warn(e); }
+            }
+        });
+
+        function converterErroFirebase(code) {
+            switch(code) {
+                case 'auth/invalid-email': return 'Formato de e-mail inválido.';
+                case 'auth/user-not-found': return 'Usuário não encontrado.';
+                case 'auth/wrong-password': return 'Senha incorreta.';
+                case 'auth/email-already-in-use': return 'Este e-mail já está cadastrado.';
+                case 'auth/weak-password': return 'A senha deve ter pelo menos 6 caracteres.';
+                default: return 'Ocorreu um erro. Tente novamente.';
+            }
+        }
+
+        // ===== LÓGICA DE INTERFACE PRIVADA =====
+
+        function prepararInterfacePrivada(email) {
+            const tabJhuana = document.getElementById('tab-jhuana');
+            const tabLarissa = document.getElementById('tab-larissa');
+            
+            // Lógica de privacidade baseada no e-mail
+            const emailLower = email.toLowerCase();
+            if (emailLower.startsWith('jhuana')) {
+                userEmailPrefix = 'jhuana';
+                tabJhuana.classList.remove('bloqueada');
+                tabLarissa.classList.add('bloqueada');
+            } else if (emailLower.startsWith('larissa')) {
+                userEmailPrefix = 'larissa';
+                tabJhuana.classList.add('bloqueada');
+                tabLarissa.classList.remove('bloqueada');
+            } else {
+                // Se for um e-mail não reconhecido, bloqueia as duas por segurança
+                userEmailPrefix = 'outro';
+                tabJhuana.classList.add('bloqueada');
+                tabLarissa.classList.add('bloqueada');
+            }
+            // Sempre reseta para a aba 'casa' ao logar
+            mudarAba('casa');
+        }
+
+
+        // ===== INICIALIZAÇÃO DO APP =====
+
+        function iniciarApp() {
+            console.log("Iniciando app para o usuário:", currentUser.uid);
+            popularSeletorMes();
+            mesAtivo = seletorMes.value;
+            conectarAoFirestore();
+            adicionarListenersGlobais();
+            mudarAbaCartao(null, 'Nubank'); // Ativa a primeira aba de cartão
+        }
+        
+        function popularSeletorMes() {
+            seletorMes.innerHTML = '';
+            const dataAtual = new Date();
+            const anoAtual = dataAtual.getFullYear();
+            const mesAtual = dataAtual.getMonth(); // 0 = Jan, 11 = Dez
+
+            for (let i = -1; i <= 3; i++) {
+                const data = new Date(anoAtual, mesAtual + i, 1);
+                const ano = data.getFullYear();
+                const mes = data.getMonth() + 1; // 1 = Jan
+                
+                const valor = `${ano}-${mes.toString().padStart(2, '0')}`; // "2025-10"
+                const nome = data.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+                
+                const option = document.createElement('option');
+                option.value = valor;
+                option.textContent = nome.charAt(0).toUpperCase() + nome.slice(1);
+                seletorMes.appendChild(option);
+            }
+            
+            const valorAtual = `${anoAtual}-${(mesAtual + 1).toString().padStart(2, '0')}`;
+            seletorMes.value = valorAtual;
+        }
+
+        function conectarAoFirestore() {
+            statusTexto.textContent = 'Conectando...';
+            statusLuz.className = 'w-3 h-3 rounded-full bg-yellow-400 animate-pulse';
+
+            if (unsubscribeFromFirestore) {
+                unsubscribeFromFirestore();
+            }
+
+            unsubscribeFromFirestore = onSnapshot(docRef, (doc) => {
+                if (doc.exists()) {
+                    appState = doc.data();
+                    console.log("Dados carregados do Firestore:", appState);
+                } else {
+                    console.log("Documento não encontrado, inicializando appState.");
+                    appState = {};
+                }
+                
+                statusTexto.textContent = 'Sincronizado';
+                statusLuz.className = 'w-3 h-3 rounded-full bg-green-500';
+
+                // Garante que o mês ativo tem dados antes de renderizar
+                iniciarDadosDoMes(mesAtivo);
+                renderizarTela();
+
+            }, (error) => {
+                console.error("Erro ao conectar no Firestore:", error);
+                statusTexto.textContent = 'Erro de Conexão';
+                statusLuz.className = 'w-3 h-3 rounded-full bg-red-500';
+            });
+        }
+
+        function adicionarListenersGlobais() {
+            seletorMes.addEventListener('change', () => {
+                mesAtivo = seletorMes.value;
+                iniciarDadosDoMes(mesAtivo);
+                renderizarTela();
+            });
+
+            // Filtro de Tags
+            document.getElementById('filtro-tag').addEventListener('change', () => {
+                renderizarTela(); // Apenas re-renderiza, o cálculo vai ler o filtro
+            });
+            
+            // Adiciona listeners aos formulários de fatura
+            ['Nubank', 'Atacadão', 'Carrefour', 'Diversos'].forEach(categoria => {
+                const form = document.getElementById(`form-fatura-${categoria}`);
+                form.addEventListener('submit', (e) => adicionarGastoVariavel(e, categoria));
+            });
+        }
+        
+        // ===== LÓGICA DE DADOS =====
+
+        /**
+         * Converte uma string de dinheiro (BRL) para um número float.
+         * Ex: "1.000,50" -> 1000.50
+         * Ex: "500" -> 500
+         * Ex: "50,00" -> 50.00
+         */
+        function parseDinheiro(valorString) {
+            if (typeof valorString !== 'string' || !valorString) {
+                return 0;
+            }
+            // Remove 'R$ ', espaços, e TODOS os pontos (tratando-os como milhar)
+            let numeroLimpo = valorString.replace(/R\$\s?|\./g, '').trim();
+            
+            // Troca a vírgula (decimal) por ponto
+            numeroLimpo = numeroLimpo.replace(',', '.');
+            
+            const valor = parseFloat(numeroLimpo);
+            return isNaN(valor) ? 0 : valor;
+        }
+
+        /**
+         * Garante que a estrutura de dados para um mês específico exista no appState
+         */
+        function iniciarDadosDoMes(mes) {
+            if (!appState[mes]) {
+                console.log(`Inicializando estrutura de dados para o mês ${mes}`);
+                appState[mes] = {
+                    rendas: {
+                        jhuana: { salario1: 0, salario2: 0 },
+                        larissa: { salario1: 0, salario2: 0 }
+                    },
+                    contasFixas: contasFixasBase.map(conta => ({ ...conta, valor: 0, pago: false })),
+                    faturas: [] // faturas é um array de objetos
+                };
+                return; // Dados são novos, não precisa verificar
+            }
+            
+            // Verifica se a estrutura de contas fixas está atualizada
+            if (!appState[mes].contasFixas || appState[mes].contasFixas.length !== contasFixasBase.length) {
+                 appState[mes].contasFixas = contasFixasBase.map(contaBase => {
+                    const contaExistente = appState[mes].contasFixas?.find(c => c.id === contaBase.id);
+                    return contaExistente || { ...contaBase, valor: 0, pago: false };
+                });
+            }
+            // Garante que 'faturas' existe
+            if (!appState[mes].faturas) {
+                appState[mes].faturas = [];
+            }
+        }
+
+        // FUNÇÃO CENTRAL DE SALVAMENTO
+        async function salvarDados() {
+            if (!docRef || isSaving) {
+                return;
+            }
+            isSaving = true;
+            
+            // 1. Coleta os dados da UI para o appState (apenas do mês ativo)
+            coletarDadosDaUI();
+
+            // 2. Salva o OBJETO INTEIRO (appState) no Firestore
+            statusTexto.textContent = 'Salvando...';
+            statusLuz.className = 'w-3 h-3 rounded-full bg-yellow-400 animate-pulse';
+            
+            try {
+                // Usamos setDoc com merge: true para não sobrescrever dados de outros usuários
+                // Mas, neste modelo, estamos salvando o objeto inteiro, então setDoc é correto
+                await setDoc(docRef, appState); 
+                console.log("Dados salvos no Firestore.");
+                // O onSnapshot vai pegar a mudança e chamar o renderizarTela()
+                // Não precisamos chamar renderizarTela() manualmente aqui
+            } catch (error) {
+                console.error("Erro ao salvar dados no Firestore:", error);
+                statusTexto.textContent = 'Erro ao Salvar';
+                statusLuz.className = 'w-3 h-3 rounded-full bg-red-500';
+            } finally {
+                isSaving = false;
+            }
+        }
+        
+        /**
+         * Pega os valores dos inputs e atualiza o objeto appState[mesAtivo]
+         */
+        function coletarDadosDaUI() {
+            const dadosMes = appState[mesAtivo];
+            if (!dadosMes) return;
+
+            // Coleta Rendas (usando os atributos data-*)
+            document.querySelectorAll('#aba-casa input[data-pessoa]').forEach(input => {
+                const pessoa = input.dataset.pessoa;
+                const campo = input.dataset.campo;
+                dadosMes.rendas[pessoa][campo] = parseDinheiro(input.value);
+            });
+            
+            // Coleta Contas Fixas (usando os atributos data-*)
+            document.querySelectorAll('#lista-contas-fixas div[data-id]').forEach(container => {
+                const id = container.dataset.id;
+                const conta = dadosMes.contasFixas.find(c => c.id === id);
+                if (conta) {
+                    conta.valor = parseDinheiro(container.querySelector('input[type="text"]').value);
+                    conta.pago = container.querySelector('input[type="checkbox"]').checked;
+                }
+            });
+        }
+        
+        // Adiciona o listener de submit globalmente (precisa ser 'window.' para o HTML onsubmit enxergar)
+        window.adicionarGastoVariavel = (event, categoria) => {
+            event.preventDefault();
+            const dadosMes = appState[mesAtivo];
+            if (!dadosMes) return;
+            
+            const form = document.getElementById(`form-fatura-${categoria}`);
+            
+            const novoGasto = {
+                id: `fatura-${new Date().getTime()}`,
+                categoria: categoria,
+                tag: form.querySelector(`input[id$="-tag"]`).value.trim() || 'Sem Tag',
+                descricao: form.querySelector(`input[id$="-descricao"]`).value,
+                valor: parseDinheiro(form.querySelector(`input[id$="-valor"]`).value), // <-- USA PARSEDINHEIRO
+                atribuido: form.querySelector(`select[id$="-atribuir"]`).value
+            };
+            
+            if (novoGDasto.valor <= 0 || !novoGasto.descricao) {
+                alert("Por favor, preencha a descrição e um valor válido.");
+                return;
+            }
+
+            dadosMes.faturas.push(novoGasto);
+            form.reset();
+            form.querySelector('input[id$="-descricao"]').focus(); // Foca no campo descrição
+            salvarDados(); // Salva e re-renderiza
+        }
+        
+        // Adicionado globalmente para ser acessível pelo onclick
+        window.removerGastoVariavel = async (id) => {
+            const dadosMes = appState[mesAtivo];
+            if (!dadosMes) return;
+            
+            if (confirm("Tem certeza que deseja remover este gasto?")) {
+                dadosMes.faturas = dadosMes.faturas.filter(gasto => gasto.id !== id);
+                await salvarDados();
+            }
+        }
+        
+        // ===== LÓGICA DE RENDERIZAÇÃO (DESENHAR NA TELA) =====
+        
+        window.mudarAba = (aba) => {
+            // Lógica de bloqueio
+            if (aba === 'jhuana' && userEmailPrefix === 'larissa') return;
+            if (aba === 'larissa' && userEmailPrefix === 'jhuana') return;
+
+            document.querySelectorAll('main section').forEach(s => s.classList.add('hidden'));
+            document.querySelectorAll('nav .aba').forEach(a => a.classList.remove('ativa'));
+            
+            document.getElementById(`aba-${aba}`).classList.remove('hidden');
+            document.getElementById(`tab-${aba}`).classList.add('ativa');
+        }
+
+        window.mudarAbaCartao = (event, cartao) => {
+            // Previne o comportamento padrão do botão se o evento existir
+            if (event) event.preventDefault();
+
+            // Esconde todos os painéis
+            document.querySelectorAll('.painel-cartao').forEach(p => p.style.display = 'none');
+            
+            // Remove 'ativa' de todas as abas de cartão
+            document.querySelectorAll('.aba-cartao').forEach(a => a.classList.remove('ativa'));
+
+            // Mostra o painel correto
+            const painel = document.getElementById(`painel-cartao-${cartao}`);
+            if(painel) painel.style.display = 'block';
+            
+            // Adiciona 'ativa' na aba de cartão clicada
+            const aba = event ? event.currentTarget : document.querySelector(`.aba-cartao[onclick*="'${cartao}'"]`);
+            if(aba) aba.classList.add('ativa');
+        }
+
+        function formatarDinheiro(valor) {
+            if (typeof valor !== 'number') {
+                valor = 0;
+            }
+            return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+        
+        /**
+         * Formata um NÚMERO para uma string que pode ser usada em um input.
+         * Ex: 1000.5 -> "1.000,50"
+         */
+        function formatarInputDinheiro(valorNumerico) {
+            if (typeof valorNumerico !== 'number' || valorNumerico === 0) {
+                 return ''; // Retorna vazio se for 0 ou inválido
+            }
+            // Formata para BRL, remove o símbolo e espaço
+            return valorNumerico.toLocaleString('pt-BR', { 
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 2 
+            });
+        }
+        
+        // FUNÇÃO CENTRAL DE RENDERIZAÇÃO
+        function renderizarTela() {
+            const dadosMes = appState[mesAtivo];
+            if (!dadosMes) {
+                console.warn(`Sem dados para renderizar o mês ${mesAtivo}.`);
+                return;
+            }
+            
+            console.log("Renderizando tela com dados:", dadosMes);
+            
+            // 1. Renderizar Rendas
+            // Usamos formatarInputDinheiro para mostrar o valor formatado
+            document.getElementById('salario-jhuana-1').value = formatarInputDinheiro(dadosMes.rendas.jhuana.salario1);
+            document.getElementById('salario-jhuana-2').value = formatarInputDinheiro(dadosMes.rendas.jhuana.salario2);
+            document.getElementById('salario-larissa-1').value = formatarInputDinheiro(dadosMes.rendas.larissa.salario1);
+            document.getElementById('salario-larissa-2').value = formatarInputDinheiro(dadosMes.rendas.larissa.salario2);
+
+            // 2. Renderizar Contas Fixas
+            renderizarContasFixas(dadosMes.contasFixas);
+
+            // 3. Renderizar Faturas (e popular filtro)
+            renderizarFaturas(dadosMes.faturas);
+
+            // 4. Calcular TUDO e renderizar resumos
+            calcularEAtualizarResumos(dadosMes);
+        }
+        
+        function renderizarContasFixas(contas) {
+            const container = document.getElementById('lista-contas-fixas');
+            container.innerHTML = '';
+            
+            if (!contas || contas.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-500">Nenhuma conta fixa encontrada.</p>';
+                return;
+            }
+
+            contas.forEach(conta => {
+                const div = document.createElement('div');
+                div.dataset.id = conta.id;
+                div.className = `flex items-center space-x-3 p-2 rounded-lg ${conta.pago ? 'bg-green-50' : 'bg-gray-50'}`;
+                
+                div.innerHTML = `
+                    <input type="checkbox" data-tipo="pago" class="h-5 w-5 rounded text-indigo-600 focus:ring-indigo-500 border-gray-300" 
+                           ${conta.pago ? 'checked' : ''} onchange="salvarDados()">
+                    
+                    <label class="flex-1 text-sm font-medium ${conta.pago ? 'text-gray-400 line-through' : 'text-gray-700'}">${conta.nome}</label>
+                    
+                    <input type="text" data-tipo="valor" value="${formatarInputDinheiro(conta.valor)}" placeholder="0,00" 
+                           class="input-form w-28 text-right text-sm" onchange="salvarDados()">
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function renderizarFaturas(faturas) {
+            const filtroTagSelect = document.getElementById('filtro-tag');
+            const tagSelecionada = filtroTagSelect.value;
+
+            // Limpa todas as listas de cartões
+            document.querySelectorAll('.lista-gastos').forEach(lista => lista.innerHTML = '');
+            // Limpa a lista agregada de filtro
+            const containerAgregado = document.getElementById('lista-faturas-agregada');
+            containerAgregado.innerHTML = '';
+
+            // Popular o <select> de tags
+            const tags = [...new Set(faturas.map(f => f.tag))].sort();
+            const tagAntiga = filtroTagSelect.value; // Salva a tag selecionada
+            
+            filtroTagSelect.innerHTML = '<option value="todas">Mostrar Todas as Tags</option>';
+            tags.forEach(tag => {
+                if(tag && tag !== 'Sem Tag') {
+                    const option = document.createElement('option');
+                    option.value = tag;
+                    option.textContent = tag;
+                    filtroTagSelect.appendChild(option);
+                }
+            });
+            // Adiciona "Sem Tag" no final
+            if (tags.includes('Sem Tag')) {
+                 filtroTagSelect.innerHTML += '<option value="Sem Tag">Sem Tag</option>';
+            }
+            filtroTagSelect.value = tagAntiga; // Restaura a tag que estava selecionada
+
+            const faturasFiltradasAgregadas = faturas.filter(f => tagSelecionada === 'todas' || f.tag === tagSelecionada);
+
+            if (faturas.length === 0) {
+                 document.getElementById('lista-fatura-Nubank').innerHTML = '<p class="text-sm text-gray-500 text-center py-2">Nenhum gasto.</p>';
+                 // (pode fazer para os outros)
+            }
+            
+            let totalVariavelFiltrado = 0;
+
+            faturas.forEach(gasto => {
+                // 1. Renderiza na aba do cartão específico
+                const listaCartao = document.getElementById(`lista-fatura-${gasto.categoria}`);
+                if (listaCartao) {
+                    listaCartao.appendChild(criarElementoGasto(gasto));
+                }
+
+                // 2. Renderiza na lista agregada (se passar no filtro)
+                if (faturasFiltradasAgregadas.includes(gasto)) {
+                    containerAgregado.appendChild(criarElementoGasto(gasto, true)); // 'true' para mostrar a categoria
+                    totalVariavelFiltrado += gasto.valor;
+                }
+            });
+
+            if (faturasFiltradasAgregadas.length === 0) {
+                 containerAgregado.innerHTML = '<p class="text-sm text-gray-500 text-center py-4">Nenhum gasto lançado (ou filtrado).</p>';
+            }
+            
+            // Atualiza o total variável *filtrado*
+             document.getElementById('total-variavel-filtrado').textContent = formatarDinheiro(totalVariavelFiltrado);
+        }
+
+        function criarElementoGasto(gasto, mostrarCategoria = false) {
+            const div = document.createElement('div');
+            div.className = 'fatura-item flex justify-between items-center bg-gray-50 p-3 rounded-lg border';
+            div.dataset.atribuido = gasto.atribuido;
+            
+            const categoriaBadge = mostrarCategoria ? `<span class="text-xs bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">${gasto.categoria}</span>` : '';
+            const tagBadge = (gasto.tag && gasto.tag !== 'Sem Tag') ? `<span class="text-xs bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded-full">${gasto.tag}</span>` : '';
+
+            div.innerHTML = `
+                <div class="flex-1 overflow-hidden min-w-0">
+                    <div class="font-medium text-gray-800 truncate" title="${gasto.descricao}">${gasto.descricao}</div>
+                    <div class="text-sm text-gray-500 flex items-center gap-1.5 mt-1">
+                        ${categoriaBadge} ${tagBadge}
+                    </div>
+                </div>
+                <div class="text-right ml-4 flex-shrink-0">
+                    <div class="font-semibold text-lg ${gasto.atribuido === 'Casa' ? 'text-gray-800' : (gasto.atribuido === 'Jhuana' ? 'text-pink-600' : 'text-violet-600')}">
+                        ${formatarDinheiro(gasto.valor)}
+                    </div>
+                    <button class="text-xs text-red-500 hover:underline" onclick="removerGastoVariavel('${gasto.id}')">Remover</button>
+                </div>
+            `;
+            // Anexa o evento de remoção
+            div.querySelector('button').onclick = () => removerGastoVariavel(gasto.id);
+            return div;
+        }
+        
+        // FUNÇÃO CENTRAL DE CÁLCULO
+        function calcularEAtualizarResumos(dadosMes) {
+            
+            if (!dadosMes || !dadosMes.rendas) {
+                console.error("Tentando calcular com dados inválidos:", dadosMes);
+                return;
+            }
+            
+            // --- 1. Rendas ---
+            const totalJhuana = (dadosMes.rendas.jhuana.salario1 || 0) + (dadosMes.rendas.jhuana.salario2 || 0);
+            const totalLarissa = (dadosMes.rendas.larissa.salario1 || 0) + (dadosMes.rendas.larissa.salario2 || 0);
+            const rendaTotalCasa = totalJhuana + totalLarissa;
+
+            document.getElementById('salario-total-jhuana').textContent = formatarDinheiro(totalJhuana);
+            document.getElementById('salario-total-larissa').textContent = formatarDinheiro(totalLarissa);
+            document.getElementById('renda-total-casa').textContent = formatarDinheiro(rendaTotalCasa);
+
+            // --- 2. Percentuais ---
+            const percJhuana = (rendaTotalCasa > 0) ? (totalJhuana / rendaTotalCasa) : 0;
+            const percLarissa = (rendaTotalCasa > 0) ? (totalLarissa / rendaTotalCasa) : 0;
+            
+            document.getElementById('percentual-jhuana').textContent = `${(percJhuana * 100).toFixed(0)}%`;
+            document.getElementById('percentual-larissa').textContent = `${(percLarissa * 100).toFixed(0)}%`;
+
+            // --- 3. Despesas ---
+            const totalContasFixas = dadosMes.contasFixas.reduce((acc, conta) => acc + (conta.valor || 0), 0);
+            
+            // Despesas *reais* (sem filtro) para o fechamento
+            const despesasCasa = dadosMes.faturas
+                .filter(f => f.atribuido === 'Casa')
+                .reduce((acc, gasto) => acc + (gasto.valor || 0), 0) + totalContasFixas;
+            
+            const despesasJhuana = dadosMes.faturas
+                .filter(f => f.atribuido === 'Jhuana')
+                .reduce((acc, gasto) => acc + (gasto.valor || 0), 0);
+            
+            const despesasLarissa = dadosMes.faturas
+                .filter(f => f.atribuido === 'Larissa')
+                .reduce((acc, gasto) => acc + (gasto.valor || 0), 0);
+            
+            const despesasPessoaisTotais = despesasJhuana + despesasLarissa;
+            const despesaTotalGeral = despesasCasa + despesasPessoaisTotais;
+            const sobraTotalGeral = rendaTotalCasa - despesaTotalGeral;
+
+            // --- 4. Resumo Geral ---
+            document.getElementById('resumo-renda-total').textContent = formatarDinheiro(rendaTotalCasa);
+            document.getElementById('resumo-despesa-casa').textContent = formatarDinheiro(despesasCasa);
+            document.getElementById('resumo-despesas-pessoais').textContent = formatarDinheiro(despesasPessoaisTotais);
+            document.getElementById('resumo-sobra-total').textContent = formatarDinheiro(sobraTotalGeral);
+            
+            const resumoSobraEl = document.getElementById('resumo-sobra-total').parentElement;
+            if (sobraTotalGeral >= 0) {
+                resumoSobraEl.className = 'bg-green-500 p-3 rounded-lg';
+            } else {
+                resumoSobraEl.className = 'bg-red-500 p-3 rounded-lg';
+            }
+            
+            // --- 5. Fechamento Individual ---
+            const contribuicaoJhuana = despesasCasa * percJhuana;
+            const contribuicaoLarissa = despesasCasa * percLarissa;
+            
+            const sobraFinalJhuana = totalJhuana - contribuicaoJhuana - despesasJhuana;
+            const sobraFinalLarissa = totalLarissa - contribuicaoLarissa - despesasLarissa;
+
+            // Jhuana
+            document.getElementById('fechamento-jhuana-salario').textContent = formatarDinheiro(totalJhuana);
+            document.getElementById('fechamento-jhuana-contribuicao').textContent = formatarDinheiro(contribuicaoJhuana);
+            document.getElementById('fechamento-jhuana-pessoais').textContent = formatarDinheiro(despesasJhuana);
+            document.getElementById('fechamento-jhuana-sobra').textContent = formatarDinheiro(sobraFinalJhuana);
+            
+            // Larissa
+            document.getElementById('fechamento-larissa-salario').textContent = formatarDinheiro(totalLarissa);
+            document.getElementById('fechamento-larissa-contribuicao').textContent = formatarDinheiro(contribuicaoLarissa);
+            document.getElementById('fechamento-larissa-pessoais').textContent = formatarDinheiro(despesasLarissa);
+            document.getElementById('fechamento-larissa-sobra').textContent = formatarDinheiro(sobraFinalLarissa);
+
+            // --- 6. Abas Pessoais ---
+            document.getElementById('sobra-pessoal-jhuana').textContent = formatarDinheiro(sobraFinalJhuana);
+            document.getElementById('sobra-pessoal-larissa').textContent = formatarDinheiro(sobraFinalLarissa);
+            
+            renderizarEspelho('jhuana', dadosMes.faturas.filter(f => f.atribuido === 'Jhuana'));
+            renderizarEspelho('larissa', dadosMes.faturas.filter(f => f.atribuido === 'Larissa'));
+        }
+
+        function renderizarEspelho(pessoa, gastos) {
+            const containerId = `espelho-${pessoa}`;
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            
+            if (gastos.length === 0) {
+                 container.innerHTML = '<p class="text-sm text-gray-500">Nenhum gasto pessoal lançado nas faturas este mês.</p>';
+                 return;
+            }
+
+            // Ordena por categoria
+            const gastosOrdenados = [...gastos].sort((a, b) => a.categoria.localeCompare(b.categoria));
+            gastosOrdenados.forEach(gasto => {
+                 container.appendChild(criarElementoGasto(gasto, true)); // 'true' para mostrar a categoria
+            });
+        }
+    
+    </script>
+</body>
+</html>
+
